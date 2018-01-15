@@ -17,6 +17,8 @@ The main purpose of this project is to identify the lane boundaries in a video a
 [slidingwindow]: ./output_images/sliding_window.png "Sliding window process output"
 [sobelthresh]: ./output_images/sobel_thresh.png "X and y orientation sobel threshold"
 [roadlane]: ./output_images/roadlane.png "Road lane correctly identified"
+[perspsuggested]: ./output_images/persp_thresh_trans_suggested.png "Thresholding results after project review"
+[suggestedthresh]: ./output_images/suggested_thresholded.png "Thresholding results after applying suggestions from the review"
 
 The Project
 ---
@@ -169,3 +171,83 @@ Here's a [link to my video result](./project_video_lines.mp4)
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
 The most difficult step was to choose the thresholds of the thresholding operations and also the kernel sizes. The problem is that the road lanes are not always similar and condtions changes constantly, so there is not a universal thresholding for all the situations. Also, the coose of the bounding boxes for the perspective transform was not easy. This project was challenging for me, but I've learn a lot!
+
+
+
+
+First Review
+---
+
+### Problem 1. There seems to be some confusion in the pipeline()code. The binary and warped images that are created are not distortion corrected. Distortion corrected images are made from original images but then they are not used by the following code.
+
+True. It was a confussion into the pipeline function. My pipeline wasn't using binary undistorted images as input. I fixed this properly!
+
+### Problem 2. Some of the kernel sizes used in the above code are not valid. The only valid kernel are 1,3,5,7. https://docs.opencv.org/2.4/modules/imgproc/doc/filtering.html?highlight=sobel#sobel
+
+Didn't know that. Need to improve my knowledge in computer vision. There is a huge lack of information :). Changed this to a valid kernel size value. Thanks!
+
+### Suggestion. I encourage you to continue trying other color spaces to isolate the yellows and whites. Try thresholding L of Luv for whites and b of Lab for yellows. By better identifying yellows and whites, the pipeline can rely less on (or avoid entirely) gradients. This is especially important and helpful for dealing with shadows and variations in the road lighting and appearance. R and V are also strong components of whites and yellows. Try to create separate thresholding strategies for whites and for yellows and then combine them.
+
+Done. Results are much better and without using any sobel, magnitude and direction thresholding! I've implemented a function called `suggested_threshold` (17 code cell in the IPython notebook) using L channel of HLS, L channel of LUV and also b channel of Lab. The results are the following:
+
+![alt text][suggestedthresh]
+
+![alt_text][perspsuggested]
+
+### Problem 3. Nice work. Binary images are transformed to obtain a birds-eye perspective of the lane lines. The lane lines no NOT appear to be parallel. A good perspective transform is very important to obtaining good results. It is best to use an image with straight lane lines for this part of the project. If the lane lines are not transformed correctly the final polygon will have a curve when it should not.
+
+#### Problem requirement 1. Try to find new source and destination points such that the lane lines appear to be parallel after transforming an image of a straight section of road.
+
+Done, much better results when warping images! The new values are the following:
+
+This source and destination points were the following:
+
+| Source        | Destination   | 
+|:-------------:|:-------------:| 
+| 580, 460      | 250, 0        | 
+| 705, 460      | 1000, 0      |
+| 1120, 720     | 1000, 720      |
+| 175, 720      | 250, 720        |
+
+Above image in this documentation was updated with the new one!
+
+#### Problem requirement 2. The image which is used to create the warped image should be distortion corrected first (see comments above).
+
+Done!
+
+#### Suggestion. When creating the binary image it may prove helpful to create the birds-eye perspective first. The reason is that error pixels in the binary get stretched out when the birds-eye transformation is performed second.
+
+Didn't know this! I will change it in the next commit! Thanks for the suggestion!
+
+
+### General suggestions
+
+Some ideas to consider are :
+
+* Are the curve estimates close in their curvature, to each other and their prior frame estimates?
+* Are the lines approximately parallel?
+* Are the lines approximately the correct distance apart?
+* Are they approximately in the same place at their closet position to the vehicle (as the last accepted curves).
+
+
+To correct this deficiency I have some suggestions:
+
+* Implement more/better sanity checks to reject unusable results and replace them with a result from prior frames. Some forms of averaging (of polynomial coefficients) over a few frames may be helpful. However don't over do it, because it is important to avoid reacting too slowly on curves or to changes in vehicle position within the lane. Ensure unusable frames are not averaged into the output results.
+
+* Continue to investigate color spaces to find a better thresholding solution. The goal is to rely more on color identification and less on gradients (which are not so useful in shadows or changing road conditions). The R and V color channels are strongly represented in yellows and whites. Try L of Luv and b of Lab also.
+
+* Capture images of video frames where problems are occurring and run the pipeline on those images to avoid long processing times while trying to solve a localized problem.
+
+* Exponential smoothing is an alternative to averaging over N frames. If you have a New frame and an Old frame, smooth by updating the New as follows: New = gamma * New + (1-gamma) * Old. 0 < gamma < 1.0
+
+* The pipeline uses an area around the lines fitted in prior images to search for lane pixels in a new image. Ensure the curve used to guide the search is reasonable at all times. The pipeline can be prepared to do a full blind search if usable curves cannot be found for a few frames, but don't be too quick to throw away valuable information about the expected location of likely lane line pixels. This is especially important to avoid if the thresholding is not detecting the lane lines, because all that is there will be noise.
+
+* Process just a particular part of the video to test troublesome areas. This example processes the frames from 39-42 seconds in `project_video`:
+
+```
+clip_input = VideoFileClip('project_video.mp4').subclip(39,42)
+clip_output = clip_input.fl_image(pipeline)
+```
+
+
+End of the project! Thanks for all the suggestions and for the exhaustive review. Was the most detailed one so far!
